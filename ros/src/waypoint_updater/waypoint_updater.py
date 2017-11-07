@@ -3,6 +3,7 @@
 import rospy
 from geometry_msgs.msg import PoseStamped
 from styx_msgs.msg import Lane, Waypoint
+from std_msgs.msg import Int32
 
 import math
 import tf
@@ -27,7 +28,11 @@ class WaypointUpdater(object):
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
-        # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
+        # Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
+        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+        
+        # I haven't seen anything about obstacle yet
+        #rospy.Subscriber('/obstacle_waypoint', None, self.obstacle_cb)
 
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
@@ -37,31 +42,48 @@ class WaypointUpdater(object):
         self.nb_wp = 0
         self.pose = None
         self.last_idx = -1
-
-        rospy.spin()
+        self.nb_ahead = rospy.get_param('~waypoint_lookahead_nb', LOOKAHEAD_WPS)
+        
+        # start the main loop
+        self.loop()
+        
+    '''
+    This is the main loop of the node.
+    On each iteration (based on waypoint_updater_freq parameter) the node will publish
+    a list of waypoints ahead of the car.
+    '''
+    def loop(self):
+        freq = rospy.get_param('~waypoint_updater_freq', 10)
+        rate = rospy.Rate(freq)
+        while not rospy.Time.now().to_sec():
+            pass
+        while not rospy.is_shutdown():
+            if self.waypoints is None or self.pose is None:
+                pass
+            else:
+                if self.last_idx < 0:
+                    self.initial_index_update()
+                self.index_update()
+                
+            rate.sleep()
 
     def pose_cb(self, msg):
         self.pose = msg.pose
-        
-        if self.waypoints is None:
-            return
-        
-        if self.last_idx < 0:
-            # initial case
-            self.initial_index_update()
-        
-        self.index_update()
 
     def waypoints_cb(self, waypoints):
         if self.waypoints is None:
             self.waypoints = waypoints.waypoints
             self.nb_wp = len(self.waypoints)
+            rospy.loginfo('Waypoints received. There are %s waypoints', self.nb_wp)
         else:
             rospy.logerr('We have got more than one base waypoint definition')
 
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
-        pass
+        if msg.data == -1:
+            pass
+        else:
+            rospy.logwarn("Traffic light handling not yet implemented in the waypoint updater. %s", msg.data)
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
@@ -122,7 +144,7 @@ class WaypointUpdater(object):
         rospy.logdebug("Current WP index: %s", self.last_idx)
         
         lane = Lane()
-        lane.waypoints = self.waypoints[self.last_idx:self.last_idx+LOOKAHEAD_WPS]
+        lane.waypoints = self.waypoints[self.last_idx:self.last_idx+self.nb_ahead]
         lane.header.frame_id = '/world'
         lane.header.stamp = rospy.Time.now()
         

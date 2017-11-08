@@ -2,6 +2,7 @@
 from yaw_controller import YawController
 from pid import PID
 from lowpass import LowPassFilter
+import rospy
 
 GAS_DENSITY = 2.858
 ONE_MPH = 0.44704
@@ -11,7 +12,8 @@ class Controller(object):
     #def __init__(self, *args, **kwargs):
     def __init__(self, vehicle_mass, fuel_capacity, break_deadband, decel_limit, accel_limit, wheel_radius, wheel_base, steer_ratio, max_lat_accel, max_steer_angle):
         # Create Yaw Controller
-        self.yaw_controller = YawController(wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle)
+	self.min_speed = 0
+        self.yaw_controller = YawController(wheel_base, steer_ratio, self.min_speed, max_lat_accel, max_steer_angle)
 
         # Create PID Controller
         # kp, ki, kd, min, max, values used from my PID project.
@@ -33,7 +35,7 @@ class Controller(object):
 	# does fuel_capacity just provide total, or current fuel?
 	self.total_mass = vehicle_mass + (fuel_capacity * GAS_DENSITY)
 	# Breaking force
-	self.breaking_force = total_mass * wheel_radius
+	self.breaking_force = self.total_mass * wheel_radius
 
 	# Init Time
 	self.current_time = rospy.get_time()

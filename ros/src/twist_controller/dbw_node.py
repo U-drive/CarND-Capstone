@@ -94,9 +94,9 @@ class DBWNode(object):
                 #                                                     <any other argument you need>)
                 throttle, brake, steer = self.controller.control(self.twist_command.twist.linear, self.twist_command.twist.angular, self.current_velocity.twist.linear, self.dbw_enabled_status)
             
-            if self.dbw_enabled_status:
-              self.publish(throttle, brake, steer)
-            rate.sleep()
+                if self.dbw_enabled_status:
+                    self.publish(throttle, brake, steer)
+                rate.sleep()
 
     def publish(self, throttle, brake, steer):
         tcmd = ThrottleCmd()

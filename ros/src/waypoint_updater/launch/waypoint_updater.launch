@@ -1,4 +1,9 @@
 <?xml version="1.0"?>
 <launch>
-    <node pkg="waypoint_updater" type="waypoint_updater.py" name="waypoint_updater" />
+    <node pkg="waypoint_updater" type="waypoint_updater.py" name="waypoint_updater">
+        <rosparam>
+            waypoint_updater_freq: 10
+            waypoint_lookahead_nb: 200
+        </rosparam>
+    </node>
 </launch>

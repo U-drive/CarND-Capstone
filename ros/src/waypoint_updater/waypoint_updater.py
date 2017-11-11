@@ -138,7 +138,7 @@ class WaypointUpdater(object):
             dy = self.waypoints[self.last_idx].pose.pose.position.y-self.pose.position.y
             
             dx_in_car = math.cos(yaw)*dx + math.sin(yaw)*dy
-            if dx > 0:
+            if dx_in_car > 0:
                 break
             self.last_idx += 1
         rospy.logdebug("Current WP index: %s", self.last_idx)

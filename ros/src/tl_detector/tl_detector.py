@@ -13,7 +13,7 @@ import yaml
 import math
 
 STATE_COUNT_THRESHOLD = 3
-LOOKAHEAD_WPS = 500 # Number of waypoints ahead our vehicle where to search for traffic lights
+LOOKAHEAD_WPS = 300 # Number of waypoints ahead our vehicle where to search for traffic lights
 
 class TLDetector(object):
     def __init__(self):
@@ -52,7 +52,10 @@ class TLDetector(object):
         self.last_wp = -1
         self.state_count = 0
 
-        self.visbility = rospy.get_param('~waypoint_lookahead_nb', LOOKAHEAD_WPS)
+        #keep trace of the last known position of our vehicle
+        self.last_pos = -1
+
+        self.visibility = rospy.get_param('~waypoint_lookahead_nb', LOOKAHEAD_WPS)
 
         rospy.spin()
 
@@ -118,13 +121,15 @@ class TLDetector(object):
              pose.orientation.w]
         )
 
-        #rospy.loginfo('car pose: (%f,%f)', pose.position.x, pose.position.y)
+        rospy.loginfo('car pose: (%f,%f)', pose.position.x, pose.position.y)
 
-        if self.last_wp == None:
-            self.last_wp = 0
-        wp_idx = self.last_wp
+        #loop through waypoints starting from few points before our last known position (to limit computational time)
+        wp_idx = max(0, self.last_pos - 300)
+        if self.last_pos == len(self.waypoints.waypoints) - 1:
+            wp_idx = 0
         dist = None
-        while dist == None or dist < 0:
+        rospy.loginfo('wp idx: %i', wp_idx)
+        while (dist == None or dist < 0) and wp_idx < len(self.waypoints.waypoints):
             wp_x = self.waypoints.waypoints[wp_idx].pose.pose.position.x
             wp_y = self.waypoints.waypoints[wp_idx].pose.pose.position.y
 
@@ -132,14 +137,21 @@ class TLDetector(object):
             dy = wp_y - pose.position.y
 
             #calculate the distance in car coordinates between the car and the waypoint
-            car_dx = math.cos(car_yaw) * dx - math.sin(car_yaw) * dy
+            car_dx = math.cos(-car_yaw) * dx - math.sin(-car_yaw) * dy
+            #car_dy = math.sin(-car_yaw) * dx + math.cos(-car_yaw) * dy
+            #dist2 = math.sqrt(car_dx**2 + car_dy**2)
+
+            #car_dx = math.cos(car_yaw) * dx + math.sin(car_yaw) * dy
+            #car_dy = 0
             dist = car_dx
 
             if (car_dx > 0):
+                rospy.loginfo('dist: %f, yaw: %f, idx: %i', car_dx, car_yaw, wp_idx)
+                self.last_pos = wp_idx
                 break
             wp_idx += 1
 
-        #rospy.loginfo('nearest waypoint: (%f,%f) - idx: %i', wp_x, wp_y, wp_idx)
+        rospy.loginfo('nearest waypoint: (%f,%f) - idx: %i', wp_x, wp_y, wp_idx)
 
         return wp_idx
 
@@ -162,9 +174,7 @@ class TLDetector(object):
              pose.orientation.w]
         )
 
-        rospy.loginfo('car pose: (%f,%f)', pose.position.x, pose.position.y)
-
-        dist = None
+        min_dist = None
         nearest_tl = None
         tl_idx = -1
         i = 0
@@ -176,16 +186,23 @@ class TLDetector(object):
             dy = tl_y - pose.position.y
 
             #calculate the distance in car coordinates between the car and the traffic light
-            car_dx = math.cos(car_yaw) * dx - math.sin(car_yaw) * dy
-            rospy.loginfo('light nr. %i: (%f,%f) - dist: %f', i, tl_x, tl_y, car_dx)
-            if (car_dx > 0 and (dist == None or dist > car_dx)):
-                dist = car_dx
+            car_dx = math.cos(-car_yaw) * dx - math.sin(-car_yaw) * dy
+            car_dy = math.sin(-car_yaw) * dx + math.cos(-car_yaw) * dy
+            dist = math.sqrt(car_dx**2 + car_dy**2)
+            rospy.loginfo('light nr. %i: (%f,%f) - dist: %f', i, tl_x, tl_y, dist)
+            if (car_dx > 0 and (min_dist == None or min_dist > dist)):
+                min_dist = dist
                 tl_idx = i
                 nearest_tl = (tl_x, tl_y, tl_idx)
 
             i += 1
 
-        rospy.loginfo('nearest semaphore: (%f,%f) - idx: %i', nearest_tl[0], nearest_tl[1], nearest_tl[2])
+        if (nearest_tl != None):
+            rospy.loginfo('nearest semaphore: (%f,%f) - idx: %i', nearest_tl[0], nearest_tl[1], nearest_tl[2])
+
+        #if the nearest traffic light is too far from us, ignore it
+        if (nearest_tl > self.visibility):
+            nearest_tl = -1
 
         '''
         if nearest_tl > -1:
@@ -193,10 +210,7 @@ class TLDetector(object):
             stop_line_position = self.config['stop_line_positions']
         '''
 
-
-
-
-        #return nearest_tl
+        #return nearest traffic light index
         return tl_idx
 
     def get_stopline_from_waypoint(self, wp_idx, stop_line_pos):
@@ -222,6 +236,11 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
+
+        #TODO: temporarily I'm returning the color state included in the light data, this will have to be replaced by the classifier
+        rospy.loginfo('light state: %s', light.state)
+        return light.state
+
         if(not self.has_image):
             self.prev_light_loc = None
             return False
@@ -260,35 +279,6 @@ class TLDetector(object):
         nearest_tl_idx = -1
         min_dist = -1
 
-        i = 0
-        for light in self.lights:
-            i += 1
-
-            #extract semaphore yaw data from quaternion
-            _,_,sem_yaw = tf.transformations.euler_from_quaternion(
-                [light.pose.pose.orientation.x,
-                 light.pose.pose.orientation.y,
-                 light.pose.pose.orientation.z,
-                 light.pose.pose.orientation.w]
-            )
-
-            #TODO: check if there is a better way to identify similar orientation (given that the range is -3/0/+3, so a value of -3 is similar to +3)
-            #check if the semaphore orientation is similar to our car orientation (+-0.4)
-            '''orient_delta = 0.4
-            if car_yaw >= sem_yaw - orient_delta or car_yaw <= sem_yaw + orient_delta or (abs(car_yaw) >= 2.6 and abs(sem_yaw) >= 2.6 and (abs(car_yaw) - abs(sem_yaw) <= orient_delta)):
-                dist = math.sqrt((self.pose.pose.position.x - light.pose.pose.position.x)**2 + (self.pose.pose.position.y - light.pose.pose.position.y)**2)
-                if dist < min_dist or min_dist < 0:
-                    min_dist = dist
-                    nearest_tl = (light.pose.pose.position.x, light.pose.pose.position.y)
-            '''
-
-            #rospy.loginfo('light %i: (%f, %f), heading: %f', i, light.pose.pose.position.x, light.pose.pose.position.y, sem_yaw)
-        #rospy.loginfo('__________________________')
-
-        '''
-        if nearest_tl != None:
-            rospy.loginfo('nearest traffic light location: (%f,%f)', nearest_tl[0], nearest_tl[1])
-        '''
 
         #filter only waypoints ahead of our vehicle
 
@@ -298,58 +288,67 @@ class TLDetector(object):
 
 
 
-        #convert to local coordinates
-        local_x = self.pose.pose.position.x * math.cos(car_yaw) - self.pose.pose.position.y * math.sin(car_yaw)
-        local_y = self.pose.pose.position.x * math.sin(car_yaw) + self.pose.pose.position.y * math.cos(car_yaw)
-        #rospy.loginfo('car local coords (%f,%f)', local_x, local_y)
-
-        #rospy.loginfo('__________________________')
-
 
 
         light = None
 
         # List of positions that correspond to the line to stop in front of for a given intersection
         stop_line_positions = self.config['stop_line_positions']
-        #get the closest waypoint and the closest traffic light to the vehicle
+        #find the closest traffic light to the vehicle (if one exists)
         if(self.pose):
-            car_wp = self.get_closest_waypoint(self.pose.pose)
+            #car_wp = self.get_closest_waypoint(self.pose.pose)
             tl_idx = self.get_closest_trafficlight(self.pose.pose)
 
-        #TODO find the closest visible traffic light (if one exists)
+        #if a traffic light has been found, find its nearest waypoint
         if tl_idx > -1:
             tl_pos = self.lights[tl_idx].pose.pose
-            tl_pos.position.x = stop_line_positions[tl_idx][0]
-            tl_pos.position.y = stop_line_positions[tl_idx][1]
-            tl_wp = self.get_closest_waypoint(tl_pos)
+            #tl_pos.position.x = stop_line_positions[tl_idx][0]
+            #tl_pos.position.y = stop_line_positions[tl_idx][1]
+            tl_wp_idx = self.get_closest_waypoint(tl_pos)
+            light = self.lights[tl_idx]
 
-        '''
+        rospy.loginfo('traffic light index: %i', tl_wp_idx)
         #find the waypoint corresponding to the stop line for the closest traffic light (if one exists)
-        if (tl_idx > -1 and tl_wp > -1):
-            stop_line_wp = get_stopline_from_waypoint(tl_wp, stop_line_positions[tl_idx])
-        '''
+        if (tl_idx > -1 and tl_wp_idx > -1):
+            #stop_line_wp = get_stopline_from_waypoint(tl_wp_idx, stop_line_positions[tl_idx])
 
+            stop_line_pos = stop_line_positions[tl_idx]
+            #I remove "3" from the stop line X because the value is refered to the center of the vehicle, so we need to stop a bit earlier than that
+            stop_line_x = stop_line_pos[0] - 3
+            stop_line_y = stop_line_pos[1]
+            min_dist = None
+            for idx in range(max(0, tl_wp_idx-100), tl_wp_idx):
+                tmp_wp = self.waypoints.waypoints[idx]
+                dx = stop_line_x - tmp_wp.pose.pose.position.x
+                dy = stop_line_y - tmp_wp.pose.pose.position.y
+                dist = math.sqrt(dx**2 + dy**2)
+                if min_dist == None or dist < min_dist:
+                    min_dist = dist
+                    stop_line_wp = idx
+
+        rospy.loginfo('stop line index: %i', stop_line_wp)
+        '''
         if car_wp > -1:
             rospy.loginfo('car position: %i (%f,%f)', car_wp, self.waypoints.waypoints[car_wp].pose.pose.position.x, self.waypoints.waypoints[car_wp].pose.pose.position.y)
         else:
             rospy.loginfo('car position: not found')
-        if tl_wp > -1:
-            rospy.loginfo('light position: %i (%f,%f)', tl_wp, self.waypoints.waypoints[tl_wp].pose.pose.position.x, self.waypoints.waypoints[tl_wp].pose.pose.position.y)
+        if tl_wp_idx > -1:
+            rospy.loginfo('light position: %i (%f,%f)', tl_wp_idx, self.waypoints.waypoints[tl_wp_idx].pose.pose.position.x, self.waypoints.waypoints[tl_wp_idx].pose.pose.position.y)
         else:
             rospy.loginfo('light position: not found')
-        if car_wp > -1 and tl_wp > -1:
-            if tl_wp > car_wp:
-                rospy.loginfo('distance: %i', tl_wp - car_wp)
+        if car_wp > -1 and tl_wp_idx > -1:
+            if tl_wp_idx > car_wp:
+                rospy.loginfo('distance: %i', tl_wp_idx - car_wp)
             else:
                 rospy.loginfo('something went wrong, traffic light waypoint is behind us')
-
+        '''
 
         #for pos in stop_line_positions:
         #    light_position = self.get_closest_waypoint(self.pose.pose)
 
         if light:
             state = self.get_light_state(light)
-            return light_wp, state
+            return stop_line_wp, state
         #self.waypoints = None
         return -1, TrafficLight.UNKNOWN
 

@@ -17,7 +17,7 @@ LOOKAHEAD_WPS = 300 # Number of waypoints ahead our vehicle where to search for 
 
 class TLDetector(object):
     def __init__(self):
-        rospy.init_node('tl_detector', log_level=rospy.DEBUG)
+        rospy.init_node('tl_detector')
 
         self.pose = None
         self.waypoints = None

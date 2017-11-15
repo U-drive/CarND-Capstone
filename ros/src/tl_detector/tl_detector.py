@@ -13,7 +13,7 @@ import yaml
 import math
 
 STATE_COUNT_THRESHOLD = 3
-LOOKAHEAD_WPS = 300 # Number of waypoints ahead our vehicle where to search for traffic lights
+LOOKAHEAD_WPS = 200 # Number of waypoints ahead our vehicle where to search for traffic lights
 
 class TLDetector(object):
     def __init__(self):

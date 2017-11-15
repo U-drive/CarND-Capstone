@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 
 import rospy
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from styx_msgs.msg import Lane, Waypoint
 from std_msgs.msg import Int32
 
 import math
 import tf
+
+import copy
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -21,6 +23,11 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 
+# temporaty, will use a polynom for best deceleration curve later
+DECEL_NB = 50
+# TBD: get the good value
+TARGET_SPEED = 11.1111 # m/s, about 25 mph
+
 class WaypointUpdater(object):
     def __init__(self):
         rospy.init_node('waypoint_updater')
@@ -30,6 +37,7 @@ class WaypointUpdater(object):
 
         # Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
         rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+        rospy.Subscriber('/current_velocity', TwistStamped, self.velocity_cb)
         
         # I haven't seen anything about obstacle yet
         #rospy.Subscriber('/obstacle_waypoint', None, self.obstacle_cb)
@@ -38,10 +46,21 @@ class WaypointUpdater(object):
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # Internal members
+        
+        # Data about the world
         self.waypoints = None
         self.nb_wp = 0
+        
+        # last known car position/speed
         self.pose = None
         self.last_idx = -1
+        self.velocity = None
+        
+        # info about trafic lights
+        self.stop_wp = -1
+        self.speed_profile = None
+        
+        # parameters
         self.nb_ahead = rospy.get_param('~waypoint_lookahead_nb', LOOKAHEAD_WPS)
         
         # start the main loop
@@ -79,11 +98,24 @@ class WaypointUpdater(object):
             rospy.logerr('We have got more than one base waypoint definition')
 
     def traffic_cb(self, msg):
-        # TODO: Callback for /traffic_waypoint message. Implement
-        if msg.data == -1:
-            pass
+        if msg.data+1 < self.last_idx:
+            # Stop waypoint is -1 or behind us, no stop
+            if self.stop_wp > 0:
+                rospy.loginfo("Restart")
+            self.stop_wp = -1
+            self.speed_profile = None
+            return
+        if self.stop_wp != msg.data:
+            rospy.loginfo("We will stop at WP %s", msg.data)
+            self.stop_wp = msg.data
+            self.compute_deceleration_profile()
         else:
-            rospy.logwarn("Traffic light handling not yet implemented in the waypoint updater. %s", msg.data)
+            # we will keep the previous profile
+            pass
+    
+    def velocity_cb(self, msg):
+        self.velocity = msg.twist.linear.x
+        
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
@@ -102,6 +134,20 @@ class WaypointUpdater(object):
             dist += dl(waypoints[wp1].pose.pose.position, waypoints[i].pose.pose.position)
             wp1 = i
         return dist
+    
+    def compute_deceleration_profile(self):
+        if self.last_idx == -1 or self.velocity is None:
+            rospy.loginfo("Cannot compute deceleration profile if I don't know the speed or the car position")
+            self.stop_wp = -1
+            return
+        
+        # naive implementation, linear compute_deceleration
+        # TODO improve this
+        self.speed_profile = copy.deepcopy(self.waypoints[self.stop_wp-DECEL_NB+1:self.stop_wp+1])
+        for i in range(DECEL_NB):
+            self.speed_profile[-i].twist.twist.linear.x *= i/DECEL_NB
+            self.speed_profile[-i].twist.twist.angular.z *= i/DECEL_NB
+        
     
     def initial_index_update(self):
         rospy.logdebug("Initial index update")
@@ -144,7 +190,27 @@ class WaypointUpdater(object):
         rospy.logdebug("Current WP index: %s", self.last_idx)
         
         lane = Lane()
-        lane.waypoints = self.waypoints[self.last_idx:self.last_idx+self.nb_ahead]
+        
+        if self.stop_wp <= self.last_idx:
+            lane.waypoints = self.waypoints[self.last_idx:self.last_idx+self.nb_ahead]
+        else:
+            lane.waypoints = copy.deepcopy(self.waypoints[self.last_idx:self.last_idx+self.nb_ahead])
+            
+            # whatever, just to avoid overshoot, temporary:
+            j = self.nb_ahead
+            
+            for i in range(DECEL_NB):
+                if i >= DECEL_NB or self.speed_profile is None:
+                    break
+                lane.waypoints[i+self.stop_wp-self.last_idx-DECEL_NB] = self.speed_profile[i]
+                
+                j = i+self.stop_wp-self.last_idx-DECEL_NB
+                
+            # temporaty
+            for i in range(j, self.nb_ahead):
+                lane.waypoints[i].twist.twist.linear.x = 0
+                
+        
         lane.header.frame_id = '/world'
         lane.header.stamp = rospy.Time.now()
         

@@ -18,8 +18,8 @@ class Controller(object):
         # Create PID Controller
         # kp, ki, kd, min, max, values used from my PID project.
         self.kp = 1
-        self.ki = 0 #0.00005
-        self.kd = 0 #2
+        self.ki = 0.01 #0.00005
+        self.kd = 0.1 #2
         self.throttle_controller_pid = PID(self.kp, self.ki, self.kd, decel_limit, accel_limit)
 
         # Create Low Pass Filter
@@ -60,7 +60,7 @@ class Controller(object):
 
 	# Calculate Throttle Value
 	# Note that throttle values passed to publish should be in the range 0 to 1.
-	self.vel_error = (desired_lin_vel) - current_vel
+	self.vel_error = desired_lin_vel - current_vel
 	self.new_acceleration_value = self.throttle_controller_pid.step(self.vel_error / ONE_MPH , self.delta_time)
 	self.filtered_acceleration_value = self.low_pass_filter.filt(self.new_acceleration_value)
 
@@ -76,8 +76,8 @@ class Controller(object):
 	if self.filtered_acceleration_value <= 0:
 		# only start breaking if not in the break deadband so that the car can be in a state 
 		# whereby its slowing down without having to apply the breaks for every deceleration
-		if abs(throttle) > self.break_deadband:
-			brake = abs(throttle) * self.breaking_force
+		if abs(self.filtered_acceleration_value) > self.break_deadband:
+			brake = abs(self.filtered_acceleration_value) * self.breaking_force
 			# when breaking make sure we are not accelerating
 			throttle = 0
 

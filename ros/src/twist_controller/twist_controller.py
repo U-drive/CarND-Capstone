@@ -48,7 +48,12 @@ class Controller(object):
 	throttle = 0
 	brake = 0
 	steer = 0
- 
+ 	
+	# Ensure that the pid controller does not accumulate error when the driver
+	# takes over Carla
+	if dbw_status is False:
+		self.throttle_controller_pid.reset()
+
 	# Calculate delta time
 	self.delta_time = rospy.get_time() - self.current_time
 	self.current_time = rospy.get_time()

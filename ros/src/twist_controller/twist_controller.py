@@ -17,9 +17,9 @@ class Controller(object):
 
         # Create PID Controller
         # kp, ki, kd, min, max, values used from my PID project.
-        self.kp = 0.1
-        self.ki = 0.00005
-        self.kd = 2
+        self.kp = 1
+        self.ki = 0 #0.00005
+        self.kd = 0 #2
         self.throttle_controller_pid = PID(self.kp, self.ki, self.kd, decel_limit, accel_limit)
 
         # Create Low Pass Filter
@@ -55,8 +55,8 @@ class Controller(object):
 
 	# Calculate Throttle Value
 	# Note that throttle values passed to publish should be in the range 0 to 1.
-	self.vel_error = desired_lin_vel - current_vel
-	self.new_acceleration_value = self.throttle_controller_pid.step(self.vel_error, self.delta_time)
+	self.vel_error = (desired_lin_vel) - current_vel
+	self.new_acceleration_value = self.throttle_controller_pid.step(self.vel_error / ONE_MPH , self.delta_time)
 	self.filtered_acceleration_value = self.low_pass_filter.filt(self.new_acceleration_value)
 
 	if self.filtered_acceleration_value > 0:

@@ -18,16 +18,16 @@ class Controller(object):
         # Create PID Controller
         # kp, ki, kd, min, max, values used from my PID project.
         self.kp = 1
-        self.ki = 0.01 #0.00005
-        self.kd = 0.1 #2
+        self.ki = 0.0005 #0.00005
+        self.kd = 0.02 #
         self.throttle_controller_pid = PID(self.kp, self.ki, self.kd, decel_limit, accel_limit)
 
         # Create Low Pass Filter
         # tau, ts
 	# I have no idea of what good values for these are going to be
 	# and cant find any notes on it from the course either! :-(
-        self.tau = 0.1
-        self.ts = 0.1
+        self.tau = 1
+        self.ts = 0.5
         self.low_pass_filter = LowPassFilter(self.tau, self.ts) 
 	
 	# Car Total Mass including Fuel

@@ -209,14 +209,14 @@ class TLDetector(object):
         """
 
         #TODO: temporarily I'm returning the color state included in the light data, this will have to be replaced by the classifier
-        rospy.logdebug('light state: %s', light.state)
-        return light.state
+        #rospy.logdebug('light state: %s', light.state)
+        #return light.state
 
         if(not self.has_image):
             self.prev_light_loc = None
             return False
 
-        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "rgb8")
 
         #Get classification
         return self.light_classifier.get_classification(cv_image)

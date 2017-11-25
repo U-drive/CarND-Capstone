@@ -23,10 +23,8 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 
-# temporaty, will use a polynom for best deceleration curve later
-DECEL_NB = 50
 # TBD: get the good value
-TARGET_SPEED = 11.1111 # m/s, about 25 mph
+MAX_DECEL = 1
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -58,7 +56,6 @@ class WaypointUpdater(object):
         
         # info about trafic lights
         self.stop_wp = -1
-        self.speed_profile = None
         
         # parameters
         self.nb_ahead = rospy.get_param('~waypoint_lookahead_nb', LOOKAHEAD_WPS)
@@ -86,9 +83,15 @@ class WaypointUpdater(object):
                 
             rate.sleep()
 
+    '''
+    Update the position measurement
+    '''
     def pose_cb(self, msg):
         self.pose = msg.pose
 
+    '''
+    Initialize the list of available waypoints
+    '''
     def waypoints_cb(self, waypoints):
         if self.waypoints is None:
             self.waypoints = waypoints.waypoints
@@ -97,22 +100,30 @@ class WaypointUpdater(object):
         else:
             rospy.logerr('We have got more than one base waypoint definition')
 
+    '''
+    Information about traffic light.
+    If the detected traffic light is ahead, create a deceleration profile
+    If we pass the trafic light (or if there is no more red light) accelerate again
+    '''
     def traffic_cb(self, msg):
+        if msg.data > self.nb_wp:
+            rospy.logerr("Got a message telling me that there was a red light at %s but I only have %s waypoints!", msg.data, self.nb_wp)
         if msg.data+1 < self.last_idx:
             # Stop waypoint is -1 or behind us, no stop
             if self.stop_wp > 0:
                 rospy.loginfo("Restart")
             self.stop_wp = -1
-            self.speed_profile = None
             return
         if self.stop_wp != msg.data:
             rospy.loginfo("We will stop at WP %s", msg.data)
             self.stop_wp = msg.data
-            self.compute_deceleration_profile()
         else:
             # we will keep the previous profile
             pass
     
+    '''
+    Update the velocity measurment
+    '''
     def velocity_cb(self, msg):
         self.velocity = msg.twist.linear.x
         
@@ -135,19 +146,6 @@ class WaypointUpdater(object):
             wp1 = i
         return dist
     
-    def compute_deceleration_profile(self):
-        if self.last_idx == -1 or self.velocity is None:
-            rospy.loginfo("Cannot compute deceleration profile if I don't know the speed or the car position")
-            self.stop_wp = -1
-            return
-        
-        # naive implementation, linear compute_deceleration
-        # TODO improve this
-        self.speed_profile = copy.deepcopy(self.waypoints[self.stop_wp-DECEL_NB+1:self.stop_wp+1])
-        for i in range(DECEL_NB):
-            self.speed_profile[-i].twist.twist.linear.x *= i/DECEL_NB
-            self.speed_profile[-i].twist.twist.angular.z *= i/DECEL_NB
-        
     
     def initial_index_update(self):
         rospy.logdebug("Initial index update")
@@ -191,24 +189,23 @@ class WaypointUpdater(object):
         
         lane = Lane()
         
-        if self.stop_wp <= self.last_idx:
+        if self.stop_wp <= 0 or self.stop_wp < self.last_idx:
             lane.waypoints = self.waypoints[self.last_idx:self.last_idx+self.nb_ahead]
         else:
-            lane.waypoints = copy.deepcopy(self.waypoints[self.last_idx:self.last_idx+self.nb_ahead])
+            lane.waypoints = copy.deepcopy(self.waypoints[self.last_idx:self.stop_wp+1])
             
-            # whatever, just to avoid overshoot, temporary:
-            j = self.nb_ahead
-            
-            for i in range(DECEL_NB):
-                if i >= DECEL_NB or self.speed_profile is None:
-                    break
-                lane.waypoints[i+self.stop_wp-self.last_idx-DECEL_NB] = self.speed_profile[i]
-                
-                j = i+self.stop_wp-self.last_idx-DECEL_NB
-                
-            # temporaty
-            for i in range(j, self.nb_ahead):
-                lane.waypoints[i].twist.twist.linear.x = 0
+            last = lane.waypoints[-1]
+            last.twist.twist.linear.x = 0
+            dist = 0
+            wp2 = last
+            dl = lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2  + (a.z-b.z)**2)
+            for wp in lane.waypoints[:-1][::-1]:
+                dist += dl(wp.pose.pose.position, wp2.pose.pose.position)
+                wp2 = wp
+                vel = math.sqrt(2*MAX_DECEL*dist)
+                if vel < 1.:
+                    vel = 0
+                wp.twist.twist.linear.x = min(vel, wp.twist.twist.linear.x)
                 
         
         lane.header.frame_id = '/world'

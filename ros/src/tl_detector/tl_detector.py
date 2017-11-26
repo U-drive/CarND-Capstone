@@ -17,7 +17,7 @@ LOOKAHEAD_WPS = 200 # Number of waypoints ahead our vehicle where to search for 
 
 class TLDetector(object):
     def __init__(self):
-        rospy.init_node('tl_detector')
+        rospy.init_node('tl_detector', log_level=rospy.ERROR)
 
         self.pose = None
         self.waypoints = None
@@ -86,6 +86,7 @@ class TLDetector(object):
         of times till we start using it. Otherwise the previous stable state is
         used.
         '''
+
         if self.state != state:
             self.state_count = 0
             self.state = state
@@ -93,8 +94,10 @@ class TLDetector(object):
             self.last_state = self.state
             light_wp = light_wp if state == TrafficLight.RED else -1
             self.last_wp = light_wp
+            rospy.loginfo('publishing WP: %s', light_wp)
             self.upcoming_red_light_pub.publish(Int32(light_wp))
         else:
+            rospy.loginfo('publishing wp: %s', self.last_wp)
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
         self.state_count += 1
 
@@ -120,31 +123,36 @@ class TLDetector(object):
         #rospy.logdebug('position: (%f,%f)', pose.position.x, pose.position.y)
 
         #loop through waypoints starting from few waypoints before our last known position (to limit computational time)
-        wp_idx = max(0, self.last_pos - 300)
-        if self.last_pos == len(self.waypoints.waypoints) - 1:
-            wp_idx = 0
+        #wp_idx = max(0, self.last_pos - 300)
+        #if self.last_pos == len(self.waypoints.waypoints) - 1:
+        #    wp_idx = 0
+        i = 0
+        wp_idx = 0
         dist = None
+        min_dist = None
 
-        while (dist == None or dist < 0) and wp_idx < len(self.waypoints.waypoints):
-            wp_x = self.waypoints.waypoints[wp_idx].pose.pose.position.x
-            wp_y = self.waypoints.waypoints[wp_idx].pose.pose.position.y
+        #while (dist == None or dist < 0) and i < len(self.waypoints.waypoints):
+        while i < len(self.waypoints.waypoints):
+            wp_x = self.waypoints.waypoints[i].pose.pose.position.x
+            wp_y = self.waypoints.waypoints[i].pose.pose.position.y
 
             dx = wp_x - pose.position.x
             dy = wp_y - pose.position.y
 
             #calculate the distance in car coordinates between the car and the waypoint
             car_dx = math.cos(-car_yaw) * dx - math.sin(-car_yaw) * dy
-            #car_dy = math.sin(-car_yaw) * dx + math.cos(-car_yaw) * dy
-            #dist2 = math.sqrt(car_dx**2 + car_dy**2)
+            car_dy = math.sin(-car_yaw) * dx + math.cos(-car_yaw) * dy
+            dist = math.sqrt(car_dx**2 + car_dy**2)
 
-            dist = car_dx
+            #rospy.logdebug('wp %i (%f,%f): dist: %f (dx:%f, dy:%f)', i, wp_x, wp_y, dist, dx, dy)
 
-            if (car_dx > 0):
-                #rospy.logdebug('dist: %f, yaw: %f, idx: %i', car_dx, car_yaw, wp_idx)
-                break
-            wp_idx += 1
+            if car_dx > 0 and (min_dist == None or dist < min_dist):
+                min_dist = dist
+                wp_idx = i
+                #rospy.logdebug('dist_dx: (%f,%f), yaw: %f, idx: %i, dist_sqrt: %f', car_dx, car_dy, car_yaw, wp_idx, dist)
+            i += 1
 
-        rospy.logdebug('nearest waypoint: (%f,%f) - idx: %i', wp_x, wp_y, wp_idx)
+        rospy.loginfo('nearest waypoint: (%f,%f) - idx: %i, dist: %s', wp_x, wp_y, wp_idx, min_dist)
 
         return wp_idx
 
@@ -261,6 +269,8 @@ class TLDetector(object):
 
         stop_line_wp = None
         #find the waypoint corresponding to the stop line for the closest traffic light (if one exists)
+        rospy.loginfo('car wp index: %i', car_idx)
+        rospy.loginfo('tl wp index: %i (%i)', tl_wp_idx, tl_idx)
         if (tl_idx > -1 and tl_wp_idx > -1):
             stop_line_pos = stop_line_positions[tl_idx]
             #I remove "3" from the stop line X because the value is refered to the center of the vehicle, so we need to stop a bit earlier than that
@@ -277,7 +287,7 @@ class TLDetector(object):
                     stop_line_wp = idx
 
         if stop_line_wp != None:
-            rospy.logdebug('stop line index: %i', stop_line_wp)
+            rospy.loginfo('stop line index: %i', stop_line_wp)
 
         '''
         if car_wp > -1:

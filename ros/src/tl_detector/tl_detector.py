@@ -12,12 +12,12 @@ import cv2
 import yaml
 import math
 
-STATE_COUNT_THRESHOLD = 3
+STATE_COUNT_THRESHOLD = 2
 LOOKAHEAD_WPS = 200 # Number of waypoints ahead our vehicle where to search for traffic lights
 
 class TLDetector(object):
     def __init__(self):
-        rospy.init_node('tl_detector', log_level=rospy.WARN)
+        rospy.init_node('tl_detector') #, log_level=rospy.WARN)
 
         self.pose = None
         self.waypoints = None
@@ -94,10 +94,10 @@ class TLDetector(object):
             self.last_state = self.state
             light_wp = light_wp if state == TrafficLight.RED else -1
             self.last_wp = light_wp
-            rospy.loginfo('publishing WP: %s', light_wp)
+            rospy.logdebug('publishing WP: %s', light_wp)
             self.upcoming_red_light_pub.publish(Int32(light_wp))
         else:
-            rospy.loginfo('publishing wp: %s', self.last_wp)
+            rospy.logdebug('publishing wp: %s', self.last_wp)
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
         self.state_count += 1
 
@@ -152,7 +152,7 @@ class TLDetector(object):
                 #rospy.logdebug('dist_dx: (%f,%f), yaw: %f, idx: %i, dist_sqrt: %f', car_dx, car_dy, car_yaw, wp_idx, dist)
             i += 1
 
-        rospy.loginfo('nearest waypoint: (%f,%f) - idx: %i, dist: %s', wp_x, wp_y, wp_idx, min_dist)
+        rospy.logdebug('nearest waypoint: (%f,%f) - idx: %i, dist: %s', wp_x, wp_y, wp_idx, min_dist)
 
         return wp_idx
 
@@ -217,14 +217,14 @@ class TLDetector(object):
         """
 
         #TODO: temporarily I'm returning the color state included in the light data, this will have to be replaced by the classifier
-        rospy.logdebug('light state: %s', light.state)
-        return light.state
+        # rospy.logdebug('light state: %s', light.state)
+        # return light.state
 
         if(not self.has_image):
             self.prev_light_loc = None
             return False
 
-        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "rgb8")
 
         #Get classification
         return self.light_classifier.get_classification(cv_image)
@@ -251,7 +251,7 @@ class TLDetector(object):
             rospy.logdebug('finding traffic light index:')
             tl_idx = self.get_closest_trafficlight(self.pose.pose)
 
-        rospy.loginfo('vehicle position: (%f,%f) - wp index: %i', self.pose.pose.position.x, self.pose.pose.position.y, car_idx)
+        rospy.logdebug('vehicle position: (%f,%f) - wp index: %i', self.pose.pose.position.x, self.pose.pose.position.y, car_idx)
 
         #if a traffic light has been found, find its nearest waypoint
         if tl_idx > -1:
@@ -269,8 +269,8 @@ class TLDetector(object):
 
         stop_line_wp = None
         #find the waypoint corresponding to the stop line for the closest traffic light (if one exists)
-        rospy.loginfo('car wp index: %i', car_idx)
-        rospy.loginfo('tl wp index: %i (%i)', tl_wp_idx, tl_idx)
+        rospy.logdebug('car wp index: %i', car_idx)
+        rospy.logdebug('tl wp index: %i (%i)', tl_wp_idx, tl_idx)
         if (tl_idx > -1 and tl_wp_idx > -1):
             stop_line_pos = stop_line_positions[tl_idx]
             #I remove "3" from the stop line X because the value is refered to the center of the vehicle, so we need to stop a bit earlier than that
@@ -287,7 +287,7 @@ class TLDetector(object):
                     stop_line_wp = idx
 
         if stop_line_wp != None:
-            rospy.loginfo('stop line index: %i', stop_line_wp)
+            rospy.logdebug('stop line index: %i', stop_line_wp)
 
         '''
         if car_wp > -1:

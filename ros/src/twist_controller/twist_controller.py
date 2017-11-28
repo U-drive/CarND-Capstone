@@ -73,7 +73,7 @@ class Controller(object):
 	# Break values passed to publish should be in units of torque (N*m)
 	# The correct values of break can be computed using the desired acceleration, weight
 	# of the vehicle, and wheel radius.
-	if self.filtered_acceleration_value <= 0:
+	elif self.filtered_acceleration_value <= 0:
 		# only start breaking if not in the break deadband so that the car can be in a state 
 		# whereby its slowing down without having to apply the breaks for every deceleration
 		if abs(self.filtered_acceleration_value) > self.break_deadband:

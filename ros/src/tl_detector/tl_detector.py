@@ -17,7 +17,7 @@ LOOKAHEAD_WPS = 200 # Number of waypoints ahead our vehicle where to search for 
 
 class TLDetector(object):
     def __init__(self):
-        rospy.init_node('tl_detector', log_level=rospy.ERROR)
+        rospy.init_node('tl_detector', log_level=rospy.WARN)
 
         self.pose = None
         self.waypoints = None
@@ -251,7 +251,7 @@ class TLDetector(object):
             rospy.logdebug('finding traffic light index:')
             tl_idx = self.get_closest_trafficlight(self.pose.pose)
 
-        rospy.logdebug('vehicle position: (%f,%f) - wp index: %i', self.pose.pose.position.x, self.pose.pose.position.y, car_idx)
+        rospy.loginfo('vehicle position: (%f,%f) - wp index: %i', self.pose.pose.position.x, self.pose.pose.position.y, car_idx)
 
         #if a traffic light has been found, find its nearest waypoint
         if tl_idx > -1:

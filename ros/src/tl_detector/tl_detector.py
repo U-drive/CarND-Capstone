@@ -274,7 +274,7 @@ class TLDetector(object):
         if (tl_idx > -1 and tl_wp_idx > -1):
             stop_line_pos = stop_line_positions[tl_idx]
             #I remove "3" from the stop line X because the value is refered to the center of the vehicle, so we need to stop a bit earlier than that
-            stop_line_x = stop_line_pos[0] - 3
+            stop_line_x = stop_line_pos[0]
             stop_line_y = stop_line_pos[1]
             min_dist = None
             for idx in range(max(0, tl_wp_idx-100), tl_wp_idx):

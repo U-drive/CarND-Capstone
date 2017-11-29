@@ -14,7 +14,7 @@ CLASSIFICATION_THRESHOLD = 0.5
 
 class TLClassifier(object):
 	def __init__(self):
-		PATH_TO_MODEL = 'models/trial_15_ssd_inc_combine_6000_frozen_inference_graph.pb' # model resnet-udacity-sim-large-10-regions
+		PATH_TO_MODEL = 'models/trial19_ssd_inception_sim_frozen_inference_graph.pb' # model resnet-udacity-sim-large-10-regions
 
 		self.saved_image_limit = 500
 		self.saved_image_counter = 1

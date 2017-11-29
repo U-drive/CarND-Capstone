@@ -43,13 +43,13 @@ class TLClassifier(object):
 		# Create a reusable sesion attribute
 		self.sess = tf.Session(graph=self.detection_graph)
 
-		# PATH_TO_LABELS = self.path
-		# NUM_CLASSES = 4
+		PATH_TO_LABELS = self.path
+		NUM_CLASSES = 4
 
-		# label_map = label_map_util.load_labelmap(PATH_TO_LABELS)
-		# categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=NUM_CLASSES,
-		# 															use_display_name=True)
-		# self.category_index = label_map_util.create_category_index(categories)
+		label_map = label_map_util.load_labelmap(PATH_TO_LABELS)
+		categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=NUM_CLASSES,
+			use_display_name=True)
+		self.category_index = label_map_util.create_category_index(categories)
 		self.count = 1
 
 	def get_classification(self, image):
@@ -78,13 +78,12 @@ class TLClassifier(object):
 		scores = np.squeeze(scores)
 		classes = np.squeeze(classes).astype(np.int32)
 
-		# vis_util.visualize_boxes_and_labels_on_image_array(
-		# 	image, boxes, classes, scores,
-		# 	self.category_index,
-		# 	use_normalized_coordinates=True,
-		# 	line_thickness=4)
-
 		if self.save_images == True and self.saved_image_counter <= self.saved_image_limit:
+			vis_util.visualize_boxes_and_labels_on_image_array(
+				image, boxes, classes, scores,
+				self.category_index,
+				use_normalized_coordinates=True,
+				line_thickness=4)
 			if not (os.path.exists("./tl_images_inference_test")):
 				os.mkdir("./tl_images_inference_test")
 			cv2.imwrite("./tl_images_inference_test/inference_image{0:0>4}.jpeg".format(self.saved_image_counter),cv2.cvtColor(image,cv2.COLOR_RGB2BGR))
@@ -109,7 +108,7 @@ class TLClassifier(object):
 			elif classes[ind_score] == 2:
 				rospy.loginfo('RED')
 				return TrafficLight.RED
-			elif classes[ind_score] == 3:
+			elif classes[ind_score] == 3 or classes[ind_score] == 7:
 				rospy.loginfo('YELLOW')
 				return TrafficLight.YELLOW
 			else:

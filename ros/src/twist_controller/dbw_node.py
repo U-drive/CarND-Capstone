@@ -72,11 +72,11 @@ class DBWNode(object):
 
     def update_current_velocity(self, msg):
         self.current_velocity = msg
-        rospy.loginfo("Received Velocity")
+        #rospy.loginfo("Received Velocity")
 
     def update_twist_cmd(self, msg):
         self.twist_command = msg
-        rospy.loginfo("Received Twist")
+        #rospy.loginfo("Received Twist")
         
 
     def update_dbw_enabled(self, msg):

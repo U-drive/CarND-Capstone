@@ -108,18 +108,11 @@ class WaypointUpdater(object):
     def traffic_cb(self, msg):
         if msg.data > self.nb_wp:
             rospy.logerr("Got a message telling me that there was a red light at %s but I only have %s waypoints!", msg.data, self.nb_wp)
-        if msg.data+1 < self.last_idx:
-            # Stop waypoint is -1 or behind us, no stop
-            if self.stop_wp > 0:
-                rospy.loginfo("Restart")
+        if msg.data <= 0:
             self.stop_wp = -1
             return
-        if self.stop_wp != msg.data:
-            rospy.loginfo("We will stop at WP %s", msg.data)
-            self.stop_wp = msg.data
-        else:
-            # we will keep the previous profile
-            pass
+        rospy.loginfo("We will stop at WP %s", msg.data)
+        self.stop_wp = msg.data
     
     '''
     Update the velocity measurment
@@ -192,17 +185,18 @@ class WaypointUpdater(object):
         if self.stop_wp <= 0 or self.stop_wp < self.last_idx:
             lane.waypoints = self.waypoints[self.last_idx:self.last_idx+self.nb_ahead]
         else:
-            lane.waypoints = copy.deepcopy(self.waypoints[self.last_idx:self.stop_wp+1])
+            lane.waypoints = copy.deepcopy(self.waypoints[self.last_idx:self.stop_wp+2])
             
-            last = lane.waypoints[-1]
+            last = lane.waypoints[-2]
             last.twist.twist.linear.x = 0
-            dist = 0
+            lane.waypoints[-1].twist.twist.linear.x = 0
+            dist = -3
             wp2 = last
             dl = lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2  + (a.z-b.z)**2)
-            for wp in lane.waypoints[:-1][::-1]:
+            for wp in lane.waypoints[:-2][::-1]:
                 dist += dl(wp.pose.pose.position, wp2.pose.pose.position)
                 wp2 = wp
-                vel = math.sqrt(2*MAX_DECEL*dist)
+                vel = math.sqrt(2*MAX_DECEL*dist) if dist >= 0 else 0.
                 if vel < 1.:
                     vel = 0
                 wp.twist.twist.linear.x = min(vel, wp.twist.twist.linear.x)

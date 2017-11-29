@@ -9,9 +9,10 @@ ONE_MPH = 0.44704
 
 
 class Controller(object):
+	
     #def __init__(self, *args, **kwargs):
     def __init__(self, vehicle_mass, fuel_capacity, break_deadband, decel_limit, accel_limit, wheel_radius, wheel_base, steer_ratio, max_lat_accel, max_steer_angle):
-        # Create Yaw Controller
+	    # Create Yaw Controller
 	self.min_speed = 0
         self.yaw_controller = YawController(wheel_base, steer_ratio, self.min_speed, max_lat_accel, max_steer_angle)
 
@@ -19,7 +20,7 @@ class Controller(object):
         # kp, ki, kd, min, max, values used from my PID project.
         self.kp = 1
         self.ki = 0.0005 #0.00005
-        self.kd = 0.02 #
+        self.kd = 0.02 #2
         self.throttle_controller_pid = PID(self.kp, self.ki, self.kd, decel_limit, accel_limit)
 
         # Create Low Pass Filter
@@ -34,16 +35,22 @@ class Controller(object):
 	# Should we not calculate this outside the constructor to compensate for used fuel?
 	# does fuel_capacity just provide total, or current fuel?
 	self.total_mass = vehicle_mass + (fuel_capacity * GAS_DENSITY)
+	
 	# Breaking force
 	self.breaking_force = self.total_mass * wheel_radius
 	self.break_deadband = break_deadband
 
 	# Init Time
 	self.current_time = rospy.get_time()
+	self.count = 0
 
 	pass
 
     def control(self, desired_lin_vel, desired_ang_vel, current_vel, dbw_status):
+	self.count = self.count + 1
+	#if self.count % 10 == 0:
+	#	rospy.loginfo("Desired: " + str(desired_lin_vel))
+
        
 	throttle = 0
 	brake = 0
@@ -64,22 +71,34 @@ class Controller(object):
 	self.new_acceleration_value = self.throttle_controller_pid.step(self.vel_error / ONE_MPH , self.delta_time)
 	self.filtered_acceleration_value = self.low_pass_filter.filt(self.new_acceleration_value)
 
-	if self.filtered_acceleration_value > 0:
+	if self.filtered_acceleration_value > 0 and desired_lin_vel != 0:
 		throttle = self.filtered_acceleration_value
 		# when accelerating make sure we are not breaking
 		brake = 0
+		if self.count % 10 == 0:
+				rospy.loginfo("Accelerating")
 		
 	# Calculate Break Value
 	# Break values passed to publish should be in units of torque (N*m)
 	# The correct values of break can be computed using the desired acceleration, weight
 	# of the vehicle, and wheel radius.
-	if self.filtered_acceleration_value <= 0:
+	elif self.filtered_acceleration_value <= 0:
 		# only start breaking if not in the break deadband so that the car can be in a state 
 		# whereby its slowing down without having to apply the breaks for every deceleration
 		if abs(self.filtered_acceleration_value) > self.break_deadband:
 			brake = abs(self.filtered_acceleration_value) * self.breaking_force
 			# when breaking make sure we are not accelerating
 			throttle = 0
+			if self.count % 10 == 0:
+				rospy.loginfo("Breaking")
+		#elif desired_lin_vel == 0:
+	#		rospy.loginfo("0 Vel Breaking.")
+	#		brake = 1
+	#		throttle = 0
+		else:
+			if self.count % 10 == 0:
+				rospy.loginfo("Coasting")
+
 
 	# Calculate Steer Value
 	steer = self.yaw_controller.get_steering(desired_lin_vel, desired_ang_vel, current_vel)

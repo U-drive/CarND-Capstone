@@ -14,7 +14,9 @@ CLASSIFICATION_THRESHOLD = 0.5
 
 class TLClassifier(object):
 	def __init__(self):
-		PATH_TO_MODEL = 'models/trial19_ssd_inception_sim_frozen_inference_graph.pb' # model resnet-udacity-sim-large-10-regions
+		self.modelpath = rospy.get_param('~model_path')
+		# PATH_TO_MODEL = 'models/trial19_ssd_inception_sim_frozen_inference_graph.pb' # model resnet-udacity-sim-large-10-regions
+		PATH_TO_MODEL = self.modelpath
 
 		self.saved_image_limit = 500
 		self.saved_image_counter = 1

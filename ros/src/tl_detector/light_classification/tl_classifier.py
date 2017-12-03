@@ -65,17 +65,16 @@ class TLClassifier(object):
 
 		"""
 
-		with self.detection_graph.as_default():
-			image_np_expanded = np.expand_dims(image, axis=0)
-			(boxes, scores, classes, num) = self.sess.run([self.detection_boxes, self.detection_scores,
-				self.detection_classes, self.num_detections],
-				feed_dict={self.image_tensor: image_np_expanded})
+		image_np_expanded = np.expand_dims(image, axis=0)
+		(boxes, scores, classes, num) = self.sess.run([self.detection_boxes, self.detection_scores,
+			self.detection_classes, self.num_detections],
+			feed_dict={self.image_tensor: image_np_expanded})
 
 	
 		#rospy.loginfo('scores: {}'.format(scores))
 		#rospy.loginfo('Classe: {}'.format(classes))
 
-		# create np arrays
+		# create np arrays with correct dimensions
 		boxes = np.squeeze(boxes)
 		scores = np.squeeze(scores)
 		classes = np.squeeze(classes).astype(np.int32)
@@ -93,6 +92,7 @@ class TLClassifier(object):
 			self.saved_image_counter += 1
 
 		#rospy.loginfo('Score: {}'.format(scores[0]))
+		# Use max scoring classification
 		max_score = 0
 		ind_score = 0
 		flag_score = 0

@@ -77,7 +77,7 @@ class WaypointUpdater(object):
             if self.waypoints is None or self.pose is None:
                 pass
             else:
-                if self.last_idx < 0:
+                if self.last_idx < 0 or self.last_idx == len(self.waypoints):
                     self.initial_index_update()
                 self.index_update()
                 

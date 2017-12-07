@@ -112,7 +112,7 @@ class TLClassifier(object):
 				return TrafficLight.RED
 			elif classes[ind_score] == 3 or classes[ind_score] == 7:
 				rospy.loginfo('YELLOW')
-				return TrafficLight.YELLOW
+				return TrafficLight.RED
 			else:
 				rospy.loginfo('UNKNOWN')
 				return TrafficLight.UNKNOWN
